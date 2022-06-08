@@ -1,10 +1,10 @@
-import time
 import torch
 import torch.nn as nn
 import torchvision.models._utils as _utils
 import torchvision.models as models
 import torch.nn.functional as F
-from torch.autograd import Variable
+from mmcv.ops import DeformConv2dPack
+
 
 def conv_bn(inp, oup, stride = 1, leaky = 0):
     return nn.Sequential(
@@ -13,11 +13,28 @@ def conv_bn(inp, oup, stride = 1, leaky = 0):
         nn.LeakyReLU(negative_slope=leaky, inplace=True)
     )
 
+
+def dconv_bn(inp, oup, stride = 1, leaky = 0):
+    return nn.Sequential(
+        DeformConv2dPack(inp, oup, 3, stride, 1, bias=False),
+        nn.BatchNorm2d(oup),
+        nn.LeakyReLU(negative_slope=leaky, inplace=True)
+    )
+
+
 def conv_bn_no_relu(inp, oup, stride):
     return nn.Sequential(
         nn.Conv2d(inp, oup, 3, stride, 1, bias=False),
         nn.BatchNorm2d(oup),
     )
+
+
+def dconv_bn_no_relu(inp, oup, stride):
+    return nn.Sequential(
+        DeformConv2dPack(inp, oup, 3, stride, 1, bias=False),
+        nn.BatchNorm2d(oup),
+    )
+
 
 def conv_bn1X1(inp, oup, stride, leaky=0):
     return nn.Sequential(
@@ -25,6 +42,7 @@ def conv_bn1X1(inp, oup, stride, leaky=0):
         nn.BatchNorm2d(oup),
         nn.LeakyReLU(negative_slope=leaky, inplace=True)
     )
+
 
 def conv_dw(inp, oup, stride, leaky=0.1):
     return nn.Sequential(
@@ -37,6 +55,7 @@ def conv_dw(inp, oup, stride, leaky=0.1):
         nn.LeakyReLU(negative_slope= leaky,inplace=True),
     )
 
+
 class SSH(nn.Module):
     def __init__(self, in_channel, out_channel):
         super(SSH, self).__init__()
@@ -44,13 +63,14 @@ class SSH(nn.Module):
         leaky = 0
         if (out_channel <= 64):
             leaky = 0.1
-        self.conv3X3 = conv_bn_no_relu(in_channel, out_channel//2, stride=1)
+        self.conv3X3 = dconv_bn_no_relu(in_channel, out_channel//2, stride=1)
 
-        self.conv5X5_1 = conv_bn(in_channel, out_channel//4, stride=1, leaky = leaky)
-        self.conv5X5_2 = conv_bn_no_relu(out_channel//4, out_channel//4, stride=1)
+        # TODO 可以尝试分两步减少通道数, 每一步//2
+        self.conv5X5_1 = dconv_bn(in_channel, out_channel//4, stride=1, leaky = leaky)
+        self.conv5X5_2 = dconv_bn_no_relu(out_channel//4, out_channel//4, stride=1)
 
-        self.conv7X7_2 = conv_bn(out_channel//4, out_channel//4, stride=1, leaky = leaky)
-        self.conv7x7_3 = conv_bn_no_relu(out_channel//4, out_channel//4, stride=1)
+        self.conv7X7_2 = dconv_bn(out_channel//4, out_channel//4, stride=1, leaky = leaky)
+        self.conv7x7_3 = dconv_bn_no_relu(out_channel//4, out_channel//4, stride=1)
 
     def forward(self, input):
         conv3X3 = self.conv3X3(input)
@@ -65,9 +85,10 @@ class SSH(nn.Module):
         out = F.relu(out)
         return out
 
+
 class FPN(nn.Module):
-    def __init__(self,in_channels_list,out_channels):
-        super(FPN,self).__init__()
+    def __init__(self, in_channels_list, out_channels):
+        super(FPN, self).__init__()
         leaky = 0
         if (out_channels <= 64):
             leaky = 0.1
@@ -134,4 +155,3 @@ class MobileNetV1(nn.Module):
         x = x.view(-1, 256)
         x = self.fc(x)
         return x
-

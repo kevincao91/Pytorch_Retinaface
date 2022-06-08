@@ -53,7 +53,7 @@ class MultiBoxLoss(nn.Module):
             ground_truth (tensor): Ground truth boxes and labels for a batch,
                 shape: [batch_size,num_objs,5] (last idx is the label).
         """
-
+        # import ipdb; ipdb.set_trace()
         loc_data, conf_data, landm_data = predictions
         priors = priors
         num = loc_data.size(0)
@@ -61,14 +61,19 @@ class MultiBoxLoss(nn.Module):
 
         # match priors (default boxes) and ground truth boxes
         loc_t = torch.Tensor(num, num_priors, 4)
-        landm_t = torch.Tensor(num, num_priors, 10)
+        landm_t = torch.Tensor(num, num_priors, 6)
         conf_t = torch.LongTensor(num, num_priors)
         for idx in range(num):
-            truths = targets[idx][:, :4].data
-            labels = targets[idx][:, -1].data
-            landms = targets[idx][:, 4:14].data
-            defaults = priors.data
-            match(self.threshold, truths, defaults, self.variance, labels, landms, loc_t, conf_t, landm_t, idx)
+            if len(targets[idx]) > 0:
+                truths = targets[idx][:, :4].data
+                labels = targets[idx][:, -1].data
+                landms = targets[idx][:, 4:-1].data
+                defaults = priors.data
+                match(self.threshold, truths, defaults, self.variance, labels, landms, loc_t, conf_t, landm_t, idx)
+            else:
+                loc_t[idx] = 0    # [num_priors,4] encoded offsets to learn
+                conf_t[idx] = 0  # [num_priors] top class label for each prior
+                landm_t[idx] = 0
         if GPU:
             loc_t = loc_t.cuda()
             conf_t = conf_t.cuda()
@@ -81,10 +86,10 @@ class MultiBoxLoss(nn.Module):
         num_pos_landm = pos1.long().sum(1, keepdim=True)
         N1 = max(num_pos_landm.data.sum().float(), 1)
         pos_idx1 = pos1.unsqueeze(pos1.dim()).expand_as(landm_data)
-        landm_p = landm_data[pos_idx1].view(-1, 10)
-        landm_t = landm_t[pos_idx1].view(-1, 10)
+        landm_p = landm_data[pos_idx1].view(-1, 6)
+        landm_t = landm_t[pos_idx1].view(-1, 6)
         loss_landm = F.smooth_l1_loss(landm_p, landm_t, reduction='sum')
-
+        
 
         pos = conf_t != zeros
         conf_t[pos] = 1
@@ -106,7 +111,8 @@ class MultiBoxLoss(nn.Module):
         _, loss_idx = loss_c.sort(1, descending=True)
         _, idx_rank = loss_idx.sort(1)
         num_pos = pos.long().sum(1, keepdim=True)
-        num_neg = torch.clamp(self.negpos_ratio*num_pos, max=pos.size(1)-1)
+        # num_neg = torch.clamp(self.negpos_ratio*num_pos, max=pos.size(1)-1)
+        num_neg = torch.clamp(self.negpos_ratio*num_pos, min=20, max=pos.size(1)-1)
         neg = idx_rank < num_neg.expand_as(idx_rank)
 
         # Confidence Loss Including Positive and Negative Examples

@@ -1,6 +1,3 @@
-import os
-import os.path
-import sys
 import torch
 import torch.utils.data as data
 import cv2
@@ -42,11 +39,14 @@ class WiderFaceDetection(data.Dataset):
         height, width, _ = img.shape
 
         labels = self.words[index]
-        annotations = np.zeros((0, 15))
+        annotations = np.zeros((0, 11))
         if len(labels) == 0:
-            return annotations
+            if self.preproc is not None:
+                img, target = self.preproc(img, annotations)
+            return torch.from_numpy(img), annotations  # 背景类图片
+            
         for idx, label in enumerate(labels):
-            annotation = np.zeros((1, 15))
+            annotation = np.zeros((1, 11))
             # bbox
             annotation[0, 0] = label[0]  # x1
             annotation[0, 1] = label[1]  # y1
@@ -60,14 +60,19 @@ class WiderFaceDetection(data.Dataset):
             annotation[0, 7] = label[8]    # l1_y
             annotation[0, 8] = label[10]   # l2_x
             annotation[0, 9] = label[11]   # l2_y
-            annotation[0, 10] = label[13]  # l3_x
-            annotation[0, 11] = label[14]  # l3_y
-            annotation[0, 12] = label[16]  # l4_x
-            annotation[0, 13] = label[17]  # l4_y
-            if (annotation[0, 4]<0):
-                annotation[0, 14] = -1
+            # annotation[0, 10] = label[13]  # l3_x
+            # annotation[0, 11] = label[14]  # l3_y
+            # annotation[0, 12] = label[16]  # l4_x
+            # annotation[0, 13] = label[17]  # l4_y
+            # if (annotation[0, 4] < 0):
+            #     annotation[0, 14] = -1
+            # else:
+            #     annotation[0, 14] = 1
+
+            if -1 in annotation[0, 4:]:
+                annotation[0, 10] = -1
             else:
-                annotation[0, 14] = 1
+                annotation[0, 10] = 1
 
             annotations = np.append(annotations, annotation, axis=0)
         target = np.array(annotations)
@@ -75,6 +80,7 @@ class WiderFaceDetection(data.Dataset):
             img, target = self.preproc(img, target)
 
         return torch.from_numpy(img), target
+
 
 def detection_collate(batch):
     """Custom collate fn for dealing with batches of images that have a different
@@ -99,3 +105,11 @@ def detection_collate(batch):
                 targets.append(annos)
 
     return (torch.stack(imgs, 0), targets)
+
+
+if __name__ == "__main__":
+    txt_path = './custom/train/label.txt'
+    dataset = WiderFaceDetection(txt_path)
+
+    import ipdb; ipdb.set_trace()
+    print()

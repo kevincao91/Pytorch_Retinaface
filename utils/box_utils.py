@@ -190,11 +190,11 @@ def encode_landm(matched, priors, variances):
     """
 
     # dist b/t match center and prior's center
-    matched = torch.reshape(matched, (matched.size(0), 5, 2))
-    priors_cx = priors[:, 0].unsqueeze(1).expand(matched.size(0), 5).unsqueeze(2)
-    priors_cy = priors[:, 1].unsqueeze(1).expand(matched.size(0), 5).unsqueeze(2)
-    priors_w = priors[:, 2].unsqueeze(1).expand(matched.size(0), 5).unsqueeze(2)
-    priors_h = priors[:, 3].unsqueeze(1).expand(matched.size(0), 5).unsqueeze(2)
+    matched = torch.reshape(matched, (matched.size(0), 3, 2))
+    priors_cx = priors[:, 0].unsqueeze(1).expand(matched.size(0), 3).unsqueeze(2)
+    priors_cy = priors[:, 1].unsqueeze(1).expand(matched.size(0), 3).unsqueeze(2)
+    priors_w = priors[:, 2].unsqueeze(1).expand(matched.size(0), 3).unsqueeze(2)
+    priors_h = priors[:, 3].unsqueeze(1).expand(matched.size(0), 3).unsqueeze(2)
     priors = torch.cat([priors_cx, priors_cy, priors_w, priors_h], dim=2)
     g_cxcy = matched[:, :, :2] - priors[:, :, :2]
     # encode variance
@@ -241,8 +241,8 @@ def decode_landm(pre, priors, variances):
     landms = torch.cat((priors[:, :2] + pre[:, :2] * variances[0] * priors[:, 2:],
                         priors[:, :2] + pre[:, 2:4] * variances[0] * priors[:, 2:],
                         priors[:, :2] + pre[:, 4:6] * variances[0] * priors[:, 2:],
-                        priors[:, :2] + pre[:, 6:8] * variances[0] * priors[:, 2:],
-                        priors[:, :2] + pre[:, 8:10] * variances[0] * priors[:, 2:],
+                        # priors[:, :2] + pre[:, 6:8] * variances[0] * priors[:, 2:],
+                        # priors[:, :2] + pre[:, 8:10] * variances[0] * priors[:, 2:],
                         ), dim=1)
     return landms
 
